@@ -277,6 +277,83 @@ class SlotAttentionClassifier(layers.Layer):
     return predictions
 
 
+class SlotAttentionSara(layers.Layer):
+  """
+  Slot Attention-based classifier for property prediction.
+
+  Starting this class from SlotAttentionClassifier, but 
+  modifying it for what I (think) Sara's inputs are.
+  
+  Nicole Hartman
+  Jun 2023
+
+  """
+
+
+  def __init__(self, resolution, num_slots, num_iterations):
+    """Builds the Slot Attention-based classifier.
+
+    Args:
+      resolution: Tuple of integers specifying width and height of input image.
+      num_slots: Number of slots in Slot Attention.
+      num_iterations: Number of iterations in Slot Attention.
+    """
+    super().__init__()
+    self.resolution = resolution
+    self.num_slots = num_slots
+    self.num_iterations = num_iterations
+
+    '''
+    TO DO: Sara, insert your best CNN for the 2 photon problem here :) 
+    -- NH 5.6.23
+    '''
+    self.encoder_cnn = tf.keras.Sequential([
+        layers.Conv2D(16, kernel_size=5, padding="SAME", activation="relu"),
+        layers.Conv2D(32, kernel_size=5, padding="SAME", activation="relu")
+    ], name="encoder_cnn")
+
+    self.encoder_pos = SoftPositionEmbed(32, self.resolution) # Has to match the output # of filters from the CNN
+
+    self.layer_norm = layers.LayerNormalization()
+    self.mlp = tf.keras.Sequential([
+        layers.Dense(64, activation="relu"),
+        layers.Dense(64)
+    ], name="feedforward")
+
+    self.slot_attention = SlotAttention(
+        num_iterations=self.num_iterations,
+        num_slots=self.num_slots,
+        slot_size=64,
+        mlp_hidden_size=128)
+
+    self.mlp_classifier = tf.keras.Sequential(
+        [layers.Dense(64, activation="relu"),
+        # This is the # of outputs for Sara... and it's a regression, so we don't want a non-linearity at the end
+        layers.Dense(3, activation="linear")],  
+        name="mlp_classifier")
+
+  def call(self, image):
+    # `image` has shape: [batch_size, width, height, num_channels].
+
+    # Convolutional encoder with position embedding.
+    x = self.encoder_cnn(image)  # CNN Backbone.
+    x = self.encoder_pos(x)  # Position embedding.
+    x = spatial_flatten(x)  # Flatten spatial dimensions (treat image as set).
+    x = self.mlp(self.layer_norm(x))  # Feedforward network on set.
+    # `x` has shape: [batch_size, width*height, input_size].
+
+    # Slot Attention module.
+    slots = self.slot_attention(x)
+    # `slots` has shape: [batch_size, num_slots, slot_size].
+
+    # Apply classifier per slot. The predictions have shape
+    # [batch_size, num_slots, set_dimension].
+
+    predictions = self.mlp_classifier(slots)
+
+    return predictions
+
+
 def build_grid(resolution):
   ranges = [np.linspace(0., 1., num=res) for res in resolution]
   grid = np.meshgrid(*ranges, sparse=False, indexing="ij")
@@ -312,6 +389,9 @@ def build_model(resolution, batch_size, num_slots, num_iterations,
     model_def = SlotAttentionAutoEncoder
   elif model_type == "set_prediction":
     model_def = SlotAttentionClassifier
+  elif model_type == "sara_model":
+    model_def = SlotAttentionSara
+
   else:
     raise ValueError("Invalid name for model type.")
 
@@ -321,5 +401,8 @@ def build_model(resolution, batch_size, num_slots, num_iterations,
   return model
 
 
-
+'''
+Note: For doing more hyperparameter optimization, it would probably be better 
+to do a new `build_model` fct with more input arguments
+'''
 
