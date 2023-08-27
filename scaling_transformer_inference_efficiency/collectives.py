@@ -112,9 +112,11 @@ def matmul_allgather_no_collective(
     rhs_split_axis,
     axis_name,
     layer,
-    layer_axis=0):
+    layer_axis=0,
+):
   """Non-overlapped allgather matmul using default allgather."""
-  rhs = lax.dynamic_index_in_dim(rhs, layer, layer_axis, keepdims=False)
+  if layer is not None:
+    rhs = lax.dynamic_index_in_dim(rhs, layer, layer_axis, keepdims=False)
   lhs = lax.all_gather(lhs, axis_name, axis=rhs_split_axis, tiled=True)
   return jnp.einsum(einsum_spec, lhs, rhs)
 
@@ -126,7 +128,8 @@ def allgather_matmul_one_way(
     rhs_split_axis,
     axis_name,
     layer,
-    layer_axis=0):
+    layer_axis=0,
+):
   """Uses a single ICI direction, overlapped all gather -> matmul.
 
   Example usage:
@@ -437,9 +440,11 @@ def matmul_reducescatter_no_collective(
     scatter_axis,
     axis_name,
     layer,
-    layer_axis=0):
+    layer_axis=0,
+):
   """Non overlapped matmul reduce scatter using default psum_scatter."""
-  rhs = lax.dynamic_index_in_dim(rhs, layer, layer_axis, keepdims=False)
+  if layer is not None:
+    rhs = lax.dynamic_index_in_dim(rhs, layer, layer_axis, keepdims=False)
   tmp = jnp.einsum(einsum_spec, lhs, rhs)
   result = lax.psum_scatter(
       tmp, axis_name, scatter_dimension=scatter_axis, tiled=True)

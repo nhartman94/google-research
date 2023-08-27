@@ -96,7 +96,9 @@ def sample(
         top_k_indices, sampled_logits  # pylint: disable=undefined-variable
     )
 
-  return sampled_logits
+  return partitioning._with_sharding_constraint(
+      sampled_logits, P('logit_batch')
+  )
 
 
 def sample_manual(
